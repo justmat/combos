@@ -16,8 +16,20 @@ local lfo_targets ={
   "none",
   "1vol",
   "2vol",
+  "1pan",
+  "2pan",
   "1feedback",
-  "2feedback"
+  "2feedback",
+  "shape",
+  "timbre",
+  "sub",
+  "noise",
+  "detune",
+  "cut",
+  "ampatk",
+  "ampdec",
+  "ampsus",
+  "amprel"
 }
 
 local tab = require 'tabutil'
@@ -94,7 +106,7 @@ function lfo.process()
 
     if params:get(i .. "lfo") == 2 then
       -- left/right volume and feedback.
-      params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, params:get(i .. "lfo_min"), params:get(i .. "lfo_max")) * 0.01)
+      params:set(lfo_targets[target], lfo[i].slope)
     end
   end
 end
