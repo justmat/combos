@@ -35,7 +35,7 @@ local lfo_targets ={
 local tab = require 'tabutil'
 local pattern_time = require 'pattern_time'
 
-local polysub = include 'we/lib/polysub'
+local polysub = require 'polysub'
 
 local g = grid.connect()
 
