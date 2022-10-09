@@ -57,18 +57,29 @@ local lfo_targets = {
 local g = grid.connect(1)
 function g.event(x,y,z) gridkey(x,y,z) end
 
+local m = midi.connect(1)
+m.event = function() end
+
 local GRID_HEIGHT = 8
 local DURATION_1 = 1 / 20
 local GRID_FRAMERATE = 1 / 60
 local SCREEN_FRAMERATE = 1 / 30
+local active_notes = {}
 
-local output_options = {"crow cv", "ii jf"}
+local output_options = {"crow cv", "ii jf", "midi"}
 local notes = { 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26, 28 }
 
 local cycles = {}
 local cycle_metros = {}
 local current_cycle = 1
 local transpose = 48
+
+local function all_notes_off()
+  for _, a in pairs(active_notes) do
+     m:note_off(a, nil, 1)
+  end
+  active_notes = {}
+end
 
 local grid_refresh_metro
 local screen_refresh_metro
@@ -99,6 +110,7 @@ end
 
 
 local function update_cycle(x, stage)
+  all_notes_off()
   ---set led.po
   local h = cycles[x].height
   local a = (stage-1) % (16-2*h) + 1
@@ -110,6 +122,9 @@ local function update_cycle(x, stage)
       crow.output[2].execute()
     elseif params:get("output") == 2 then
       crow.ii.jf.play_note(((notes[x] + params:get("transpose")) - 60) / 12, 5)
+    elseif params:get("output") == 3 then
+      m:note_on(notes[x] + params:get("transpose"), 96, 1)
+      table.insert(active_notes, notes[x])
     end
   else
     
