@@ -76,7 +76,7 @@ local transpose = 48
 
 local function all_notes_off()
   for _, a in pairs(active_notes) do
-     m:note_off(a, nil, 1)
+     m:note_off(a + params:get("transpose"), nil, 1)
   end
   active_notes = {}
 end
