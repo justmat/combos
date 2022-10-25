@@ -11,6 +11,7 @@ engine.name = "Decimator"
 
 local sc = include("otis/lib/tlps")
 sc.file_path = "/home/we/dust/audio/tape/otis."
+mu = require "musicutil"
 
 local lfo = include("otis/lib/hnds")
 
@@ -33,10 +34,13 @@ local skipped_R = false
 local pages = {"mix", "play", "edit", "boingg"}
 local skip_options = {"start", "???"}
 local speed_options = {"free", "octaves"}
-
+local spds = include("lib/spds")
+local speed_index = {4, 4} -- maybe move this to spds.lua?
 -- for lib/hnds
 local lfo_targets = {
   "none",
+  "sample_rate",
+  "bit_depth",
   "1pan",
   "2pan",
   "1vol",
@@ -50,8 +54,97 @@ local lfo_targets = {
   "flip L",
   "flip R",
   "skip L",
-  "skip R"
+  "skip R",
+  "saturation",
+  "crossover",
+  "tone",
+  "hiss",
 }
+
+
+function lfo.process()
+  for i = 1, 4 do
+    local target = params:get(i .. "lfo_target")
+
+    if params:get(i .. "lfo") == 2 then
+      -- sample rate
+      if target == 2 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 0.0, 48000.0))
+      -- bit depth
+      elseif target == 3 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 4.0, 32.0))
+      -- left/right panning, volume, feedback
+      elseif target > 3 and target <= 9 then
+        params:set(lfo_targets[target], util.clamp(lfo[i].slope, -1, 1))
+      -- speed
+      elseif target == 10 or target == 11 then
+        --no speed control
+        if params:get("speed_controls") == 1 then
+          if flipped_L or flipped_R then
+            params:set(lfo_targets[target], -lfo[i].slope)
+          else
+            params:set(lfo_targets[target], lfo[i].slope)
+          end
+        elseif params:get("speed_controls") > 1 then
+          local speed_set = spds.names[params:get("speed_controls")]
+          speed_index[target - 9] = util.round(util.linlin(-1.0,1.0,1,#spds[speed_set], lfo[i].slope))
+          if flipped_L or flipped_R then
+            params:set(lfo_targets[target], -spds[speed_set][speed_index[target - 9]])
+          else
+            params:set(lfo_targets[target], spds[speed_set][speed_index[target - 9]])
+          end
+        end
+      -- record L on/off
+      elseif target == 12 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          rec1 = not rec1
+          params:set("1rec", rec1 == true and 1 or 0)
+        end
+      -- record R on/off
+      elseif target == 13 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          rec2 = not rec2
+          params:set("2rec", rec2 == true and 1 or 0)
+        end
+      -- flip L
+      elseif target == 14 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          flipped_L = not flipped_L
+          flip(1)
+        end
+
+      -- flip R
+      elseif target == 15 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          flipped_R = not flipped_R
+          flip(2)
+        end
+      -- skip L
+      elseif target == 16 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          skipped_L = not skipped_L
+          skip(1)
+        end
+      -- skip R
+      elseif target == 17 then
+        if lfo[i].trig and lfo[i].slope > 0 then
+          skipped_R = not skipped_R
+          skip(2)
+        end
+      elseif target == 18 then --saturation
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 0.0, 400.0))
+      elseif target == 19 then --crossover
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 50, 10000.0))
+      elseif target == 20 then --tone
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 0.01, 1))
+      elseif target == 21 then --noise
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1, 1, 0, 5))
+      end
+    end
+  end
+end
+
+
 
 
 local g = grid.connect(1)
@@ -195,85 +288,26 @@ local function speed_control(n, d)
 end
 
 
--- for lib/hnds
-function lfo.process()
-
-  for i = 1, 4 do
-
-    local offset = params:get(i .. "offset")
-    local target = params:get(i .. "lfo_target")
-
-    if params:get(i .. "lfo") == 2 then
-      -- left/right panning, volume, feedback, speed
-      if target > 1 and target <= 9 then
-        params:set(lfo_targets[target], lfo[i].slope)
-      -- record L on/off
-      elseif target == 10 then
-        if lfo[i].slope > 0 then
-          if not rec1 then
-            rec1 = true
-            softcut.rec(1, 1)
-          end
-        else
-          rec1 = false
-          softcut.rec(1, 0)
-        end
-      -- record R on/off
-      elseif target == 11 then
-        if lfo[i].slope > 0 then
-          if not rec2 then
-            rec2 = true
-            softcut.rec(2, 1)
-          end
-        else
-          rec2 = false
-          softcut.rec(2, 0)
-        end
-      -- flip L
-      elseif target == 12 then
-        if lfo[i].slope > 0 then
-          if not flipped_L then
-            flip(1)
-            flipped_L = true
-          end
-        else flipped_L = false end
-      -- flip R
-      elseif target == 13 then
-        if lfo[i].slope > 0 then
-          if not flipped_R then
-            flip(2)
-            flipped_R = true
-          end
-        else flipped_R = false end
-      -- skip L
-      elseif target == 14 then
-        if lfo[i].slope > 0 then
-          if not skipped_L then
-            skip(1)
-            skipped_L = true
-          end
-        else skipped_L = false end
-      -- skip R
-      elseif target == 15 then
-        if lfo[i].slope > 0 then
-          if not skipped_R then
-            skip(2)
-            skipped_R = true
-          end
-        else skipped_R = false end
-      end
-    end
-  end
-end
-
-
 function init()
   -- sample rate
   params:add_control("sample_rate", "sample rate", controlspec.new(0, 48000, "lin", 10, 48000, ''))
   params:set_action("sample_rate", function(x) engine.srate(x) end)
   -- bit depth
-  params:add_control("bit_depth", "bit depth", controlspec.new(4, 31, "lin", 0, 31, ''))
+  params:add_control("bit_depth", "bit depth", controlspec.new(4, 32, "lin", 0, 32, ''))
   params:set_action("bit_depth", function(x) engine.sdepth(x) end)
+    -- tape sat
+  params:add_control("saturation", "saturation", controlspec.new(0.1, 400, "exp", 1, 5, ''))
+  params:set_action("saturation", function(x) engine.distAmount(x) end)
+  -- crossover filter
+  params:add_control("crossover", "crossover", controlspec.new(50, 10000, "exp", 10, 2000, ''))
+  params:set_action("crossover", function(x) engine.crossover(x) end)
+  -- bias
+  params:add_control("tone", "tone", controlspec.new(0.001, 1, "lin", 0.001, 0.004, ''))
+  params:set_action("tone", function(x) engine.highbias(x) end)
+  -- tape hiss
+  params:add_control("hiss", "hiss", controlspec.new(0, 10, "lin", 0.01, 0.001, ''))
+  params:set_action("hiss", function(x) engine.hissAmount(x) end)
+
   params:add_separator()
 
   for i=1, 16 do
@@ -283,6 +317,17 @@ function init()
 
   params:add_option("output", "output", output_options, 1)
   params:set_action("output", function() set_output() end)
+
+  params:add{
+    type = "option", id = "audio_routing", name = "audio routing", 
+    options = {"in+cut->eng", "in->eng", "cut->eng"},
+    -- min = 1, max = 3, 
+    default = 1,
+    action = function(value) 
+      rerouting_audio = true
+      clock.run(route_audio)
+    end
+    }
 
   params:add_number("tempo", "tempo", 10, 240, 40)
   params:set_action("tempo", function(t)
@@ -393,7 +438,7 @@ local function boingg_enc(n, d)
       redraw()
     end
   elseif n == 3 then
-    notes[current_cycle] = util.clamp(notes[current_cycle] + d, -32, 32)
+    notes[current_cycle] = util.clamp(notes[current_cycle] + d, 0, 32)
     redraw()
   end
 end
@@ -679,6 +724,13 @@ local function draw_page_boingg()
       screen.fill()
     end
   end
+  
+  for i = 1, 16 do
+    local x = (i-1) * 8
+    local y = 60
+    screen.move(x, y)
+    screen.text(mu.note_num_to_name(mu.freq_to_note_num(midicps(notes[i]))))
+  end
 
   screen.update()
 end
@@ -725,4 +777,40 @@ function g.key(x, y, s)
      --- print("Starting col " .. x .. "height" .. y)
     end
   end
+end
+
+
+function route_audio()
+    clock.sleep(0.5)
+    local selected_route = params:get("audio_routing")
+    if rerouting_audio == true then
+      rerouting_audio = false
+      if selected_route == 1 then -- audio in + softcut output -> supercollider
+        os.execute("jack_connect crone:output_5 SuperCollider:in_1;")  
+        os.execute("jack_connect crone:output_6 SuperCollider:in_2;")
+        os.execute("jack_connect softcut:output_1 SuperCollider:in_1;")  
+        os.execute("jack_connect softcut:output_2 SuperCollider:in_2;")
+      elseif selected_route == 2 then --just audio in -> supercollider
+        os.execute("jack_disconnect softcut:output_1 SuperCollider:in_1;")  
+        os.execute("jack_disconnect softcut:output_2 SuperCollider:in_2;")
+        os.execute("jack_connect crone:output_5 SuperCollider:in_1;")  
+        os.execute("jack_connect crone:output_6 SuperCollider:in_2;")
+      elseif selected_route == 3 then -- just softcut output -> supercollider
+        os.execute("jack_disconnect crone:output_5 SuperCollider:in_1;")  
+        os.execute("jack_disconnect crone:output_6 SuperCollider:in_2;")
+        os.execute("jack_connect softcut:output_1 SuperCollider:in_1;")  
+        os.execute("jack_connect softcut:output_2 SuperCollider:in_2;")
+      end
+    end
+end
+
+function cleanup ()
+  if _print then print = _print end
+  print("cleanup")
+  metro.free_all()
+  os.execute("jack_disconnect softcut:output_1 SuperCollider:in_1;")  
+  os.execute("jack_disconnect softcut:output_2 SuperCollider:in_2;")
+  os.execute("jack_connect crone:output_5 SuperCollider:in_1;")  
+  os.execute("jack_connect crone:output_6 SuperCollider:in_2;")
+  audio.level_eng_cut(1)
 end
