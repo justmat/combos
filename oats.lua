@@ -33,7 +33,9 @@ local skipped_R = false
 
 local pages = {"mix", "play", "edit", "boingg"}
 local skip_options = {"start", "???"}
-local speed_options = {"free", "octaves"}
+
+local spds = include("lib/spds")
+local speed_options = spds.names
 local spds = include("lib/spds")
 local speed_index = {4, 4} -- maybe move this to spds.lua?
 -- for lib/hnds
